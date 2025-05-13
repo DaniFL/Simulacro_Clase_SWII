@@ -90,3 +90,53 @@ resultados y puede ser que la ruta no sea correcta del todo):
 
 Modifica el archivo OpenAPI para tener en cuenta esta modificación.
 
+Para resolver este apartado se ha modificado la ruta (routes/book.js) del método getBooks() para que devuelva el link de cada libro. (se añade manera manual)
+//getBooks()
+router.get('/', async (req, res) => {
+  let limit = MAX_RESULTS;
+  if (req.query.limit){
+    limit = Math.min(parseInt(req.query.limit), MAX_RESULTS);
+  }
+  let next = req.query.next;
+  let query = {}
+  if (next){
+    query = {_id: {$lt: new ObjectId(next)}}
+  }
+  const dbConnect = dbo.getDb();
+  let results = await dbConnect
+    .collection(COLLECTION)
+    .find(query, { projection: {_id:1, title: 1, author: 1 }})
+    .sort({_id: -1})
+    .limit(limit)
+    .toArray()
+    .catch(err => res.status(400).send('Error searching for books'));
+  next = results.length == limit ? results[results.length - 1]._id : null;
+  ## Modificación: se añade el link a cada libro (a machete) ##
+  results = results.map(book => ({
+  ...book,
+  link: `http://localhost:3000/api/v2/book/${book._id}`
+}));
+  res.json({results, next}).status(200);
+});
+
+Además, también se ha modificado el archivo OpenAPI (library.schema.yaml) para que tenga en cuenta esta modificación.
+
+schemas:
+  BookMin:
+      type: object
+      properties:
+        _id:
+          $ref: "#/components/schemas/ID"
+        title:
+          type: string
+          description: Book title
+        author:
+          type: string
+          description: Book author
+        link:                               ## Modificación
+          type: string
+          description: Link to book resource
+      required:
+        - _id
+        - title
+        - author
